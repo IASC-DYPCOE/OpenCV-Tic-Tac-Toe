@@ -161,4 +161,22 @@ class TicTacToe:
 
             self.draw_board()
 
+            if results.multi_hand_landmarks:
+                hands_landmarks = results.multi_hand_landmarks[0]
+                self.mp_draw.draw_landmarks(
+                    self.game_board, hands_landmarks, self.mp_hands.HAND_CONNECTIONS
+                )
 
+                index_tip = hands_landmarks.landmark[0]
+                x = int(index_tip.x * self.board_size)
+                y = int(index_tip.y * self.board_size)
+
+                cv2.circle(self.game_board, (x, y), 10, (0, 255, 0), -1)
+
+                current_time = cv2.getTickCount() / cv2.getTickFrequency()
+                if (
+                    self.is_pinching(hands_landmarks)
+                    and current_time - last_move_time > cooldown
+                    and not self.game_over
+                ):
+                    row, col = self.get_cell_from_coordinates(x, y)
