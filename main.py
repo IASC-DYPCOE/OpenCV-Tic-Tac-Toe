@@ -93,3 +93,132 @@ class TicTacToe:
             return 0
 
         return None
+
+    def get_empty_cells(self, board):
+        return list(zip(*np.where(board == 0)))
+
+    def is_terminal_state(self, board):
+        winner = self.check_winner()
+        if winner is not None:
+            return True
+        return len(self.get_empty_cells(board)) == 0
+
+    def minimax(self, board, depth, is_maximizing):
+        winner = self.check_winner()
+        if winner == self.computer_player:
+            return 1
+        elif winner == self.human_player:
+            return -1
+        elif winner == 0:
+            return 0
+
+        if is_maximizing:
+            best_score = float("-inf")
+            for row, col in self.get_empty_cells(board):
+                board[row, col] = self.computer_player
+                score = self.minimax(board, depth + 1, False)
+                board[row, col] = 0
+                best_score = max(score, best_score)
+            return best_score
+        else:
+            best_score = float("inf")
+            for row, col in self.get_empty_cells(board):
+                board[row, col] = self.human_player
+                score = self.minimax(board, depth + 1, True)
+                board[row, col] = 0
+                best_score = min(score, best_score)
+            return best_score
+
+    def computer_move(self):
+        best_score = float("-inf")
+        best_move = None
+
+        for row, col in self.get_empty_cells(self.board):
+            self.board[row, col] = self.computer_player
+            score = self.minimax(self.board, 0, False)
+            self.board[row, col] = 0
+
+            if score > best_score:
+                best_score = score
+                best_move = (row, col)
+
+        if best_move:
+            self.board[best_move[0], best_move[1]] = self.computer_player
+
+    def play(self):
+        cap = cv2.VideoCapture(0)
+        last_move_time = 0
+        cooldown = 1.0
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            frame = cv2.flip(frame, 1)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.hands.process(rgb_frame)
+
+            self.draw_board()
+
+            if results.multi_hand_landmarks:
+                hands_landmarks = results.multi_hand_landmarks[0]
+                self.mp_draw.draw_landmarks(
+                    self.game_board, hands_landmarks, self.mp_hands.HAND_CONNECTIONS
+                )
+
+                index_tip = hands_landmarks.landmark[0]
+                x = int(index_tip.x * self.board_size)
+                y = int(index_tip.y * self.board_size)
+
+                cv2.circle(self.game_board, (x, y), 10, (0, 255, 0), -1)
+
+                current_time = cv2.getTickCount() / cv2.getTickFrequency()
+                if (
+                    self.is_pinching(hands_landmarks)
+                    and current_time - last_move_time > cooldown
+                    and not self.game_over
+                ):
+                    row, col = self.get_cell_from_coordinates(x, y)
+                    if 0 <= row < 3 and 0 <= col < 3 and self.board[row, col] == 0:
+                        self.board[row, col] = self.human_player
+                        last_move_time = current_time
+
+                        winner = self.check_winner()
+                        if winner is None:
+                            self.computer_move()
+
+            winner = self.check_winner()
+            if winner is not None and not self.game_over:
+                self.game_over = True
+                self.winner = winner
+
+            if self.game_over:
+                text = (
+                    "Draw!"
+                    if self.winner == 0
+                    else f"Player {'X' if self.winner == 1 else 'O'} wins!"
+                )
+                cv2.putText(
+                    self.game_board,
+                    text,
+                    (self.board_size // 4, self.board_size // 2),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (0, 0, 0),
+                    2,
+                )
+
+            cv2.imshow("Hand Tracking", frame)
+            cv2.imshow("Tic Tac Toe!!", self.game_board)
+
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+
+        cap.release()
+        cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    game = TicTacToe()
+    game.play()
