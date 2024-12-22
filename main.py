@@ -128,3 +128,19 @@ class TicTacToe:
                 board[row, col] = 0
                 best_score = min(score, best_score)
             return best_score
+
+    def computer_move(self):
+        best_score = float("-inf")
+        best_move = None
+
+        for row, col in self.get_empty_cells(self.board):
+            self.board[row, col] = self.computer_player
+            score = self.minimax(self.board, 0, False)
+            self.board[row, col] = 0
+
+            if score > best_score:
+                best_score = score
+                best_move = (row, col)
+
+        if best_move:
+            self.board[best_move[0], best_move[1]] = self.computer_player
