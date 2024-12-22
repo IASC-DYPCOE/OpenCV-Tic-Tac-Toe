@@ -28,6 +28,16 @@ class TicTacToe:
             (self.board_size, self.board_size, 3), dtype=np.uint8
         )
 
+    def is_pinching(self, hand_landmarks):
+        thumb_tip = hand_landmarks.landmark[4]
+        index_tip = hand_landmarks.landmark[8]
+
+        distance = math.sqrt(
+            (thumb_tip.x - index_tip.x) ** 2 + (thumb_tip.y - index_tip.y) ** 2
+        )
+
+        return distance < 0.05
+
     def get_cell_from_coordinates(self, x, y):
         row = int(y * 3 // self.board_size)
         col = int(x * 3 // self.board_size)
