@@ -8,8 +8,9 @@ import math
 class TicTacToe:
     def __init__(self):
         self.board = np.zeros((3, 3), dtype=int)
-        self.human_player = 1
-        self.computer_player = -1
+        # Swap the player values so computer (X) is 1 and human (O) is -1
+        self.computer_player = 1  # X
+        self.human_player = -1  # O
         self.game_over = False
         self.winner = None
 
@@ -28,6 +29,9 @@ class TicTacToe:
             (self.board_size, self.board_size, 3), dtype=np.uint8
         )
 
+        # Make computer play first
+        self.computer_move()
+
     def reset_game(self):
         """Reset the game state to start a new game."""
         self.board = np.zeros((3, 3), dtype=int)
@@ -36,6 +40,8 @@ class TicTacToe:
         self.game_board = np.zeros(
             (self.board_size, self.board_size, 3), dtype=np.uint8
         )
+        # Make computer play first move after reset
+        self.computer_move()
 
     def is_pinching(self, hand_landmarks):
         thumb_tip = hand_landmarks.landmark[4]
@@ -78,7 +84,7 @@ class TicTacToe:
                     i * self.cell_size + self.cell_size // 2,
                 )
 
-                if self.board[i, j] == 1:
+                if self.board[i, j] == 1:  # Computer (X)
                     cv2.line(
                         self.game_board,
                         (center[0] - 60, center[1] - 60),
@@ -93,7 +99,7 @@ class TicTacToe:
                         (255, 0, 0),
                         3,
                     )
-                elif self.board[i, j] == -1:
+                elif self.board[i, j] == -1:  # Human (O)
                     cv2.circle(self.game_board, center, 60, (0, 0, 255), 3)
 
     def check_winner(self):
@@ -213,11 +219,14 @@ class TicTacToe:
                 self.winner = winner
 
             if self.game_over:
-                text = (
-                    "Draw!"
-                    if self.winner == 0
-                    else f"Player {'X' if self.winner == 1 else 'O'} wins!"
-                )
+                if self.winner == 0:
+                    text = "Draw!"
+                else:
+                    text = (
+                        "Computer (X) wins!"
+                        if self.winner == self.computer_player
+                        else "Player (O) wins!"
+                    )
                 cv2.putText(
                     self.game_board,
                     text,
@@ -227,7 +236,6 @@ class TicTacToe:
                     (0, 0, 0),
                     3,
                 )
-                # Add reset game text
                 cv2.putText(
                     self.game_board,
                     "Press 'r' to reset",
