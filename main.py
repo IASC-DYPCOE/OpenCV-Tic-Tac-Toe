@@ -180,3 +180,45 @@ class TicTacToe:
                     and not self.game_over
                 ):
                     row, col = self.get_cell_from_coordinates(x, y)
+                    if 0 <= row < 3 and 0 <= col < 3 and self.board[row, col] == 0:
+                        self.board[row, col] = self.human_player
+                        last_move_time = current_time
+
+                        winner = self.check_winner()
+                        if winner is None:
+                            self.computer_move()
+
+            winner = self.check_winner()
+            if winner is not None and not self.game_over:
+                self.game_over = True
+                self.winner = winner
+
+            if self.game_over:
+                text = (
+                    "Draw!"
+                    if self.winner == 0
+                    else f"Player {'X' if self.winner == 1 else 'O'} wins!"
+                )
+                cv2.putText(
+                    self.game_board,
+                    text,
+                    (self.board_size // 4, self.board_size // 2),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (0, 0, 0),
+                    2,
+                )
+
+            cv2.imshow("Hand Tracking", frame)
+            cv2.imshow("Tic Tac Toe!!", self.game_board)
+
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+
+        cap.release()
+        cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    game = TicTacToe()
+    game.play()
