@@ -144,3 +144,21 @@ class TicTacToe:
 
         if best_move:
             self.board[best_move[0], best_move[1]] = self.computer_player
+
+    def play(self):
+        cap = cv2.VideoCapture(0)
+        last_move_time = 0
+        cooldown = 1.0
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            frame = cv2.flip(frame, 1)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.hands.process(rgb_frame)
+
+            self.draw_board()
+
+
