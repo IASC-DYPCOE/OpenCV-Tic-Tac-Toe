@@ -28,6 +28,15 @@ class TicTacToe:
             (self.board_size, self.board_size, 3), dtype=np.uint8
         )
 
+    def reset_game(self):
+        """Reset the game state to start a new game."""
+        self.board = np.zeros((3, 3), dtype=int)
+        self.game_over = False
+        self.winner = None
+        self.game_board = np.zeros(
+            (self.board_size, self.board_size, 3), dtype=np.uint8
+        )
+
     def is_pinching(self, hand_landmarks):
         thumb_tip = hand_landmarks.landmark[4]
         index_tip = hand_landmarks.landmark[8]
@@ -172,12 +181,12 @@ class TicTacToe:
             self.draw_board()
 
             if results.multi_hand_landmarks:
-                hands_landmarks = results.multi_hand_landmarks[0]
+                hand_landmarks = results.multi_hand_landmarks[0]
                 self.mp_draw.draw_landmarks(
-                    self.game_board, hands_landmarks, self.mp_hands.HAND_CONNECTIONS
+                    frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS
                 )
 
-                index_tip = hands_landmarks.landmark[0]
+                index_tip = hand_landmarks.landmark[8]
                 x = int(index_tip.x * self.board_size)
                 y = int(index_tip.y * self.board_size)
 
@@ -185,7 +194,7 @@ class TicTacToe:
 
                 current_time = cv2.getTickCount() / cv2.getTickFrequency()
                 if (
-                    self.is_pinching(hands_landmarks)
+                    self.is_pinching(hand_landmarks)
                     and current_time - last_move_time > cooldown
                     and not self.game_over
                 ):
@@ -214,16 +223,29 @@ class TicTacToe:
                     text,
                     (self.board_size // 4, self.board_size // 2),
                     cv2.FONT_HERSHEY_SIMPLEX,
+                    2,
+                    (0, 0, 0),
+                    3,
+                )
+                # Add reset game text
+                cv2.putText(
+                    self.game_board,
+                    "Press 'r' to reset",
+                    (self.board_size // 4, self.board_size // 2 + 50),
+                    cv2.FONT_HERSHEY_SIMPLEX,
                     1,
                     (0, 0, 0),
                     2,
                 )
 
             cv2.imshow("Hand Tracking", frame)
-            cv2.imshow("Tic Tac Toe!!", self.game_board)
+            cv2.imshow("Tic Tac Toe", self.game_board)
 
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
                 break
+            elif key == ord("r"):
+                self.reset_game()
 
         cap.release()
         cv2.destroyAllWindows()
