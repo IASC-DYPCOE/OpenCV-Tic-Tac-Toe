@@ -93,3 +93,38 @@ class TicTacToe:
             return 0
 
         return None
+
+    def get_empty_cells(self, board):
+        return list(zip(*np.where(board == 0)))
+
+    def is_terminal_state(self, board):
+        winner = self.check_winner()
+        if winner is not None:
+            return True
+        return len(self.get_empty_cells(board)) == 0
+
+    def minimax(self, board, depth, is_maximizing):
+        winner = self.check_winner()
+        if winner == self.computer_player:
+            return 1
+        elif winner == self.human_player:
+            return -1
+        elif winner == 0:
+            return 0
+
+        if is_maximizing:
+            best_score = float("-inf")
+            for row, col in self.get_empty_cells(board):
+                board[row, col] = self.computer_player
+                score = self.minimax(board, depth + 1, False)
+                board[row, col] = 0
+                best_score = max(score, best_score)
+            return best_score
+        else:
+            best_score = float("inf")
+            for row, col in self.get_empty_cells(board):
+                board[row, col] = self.human_player
+                score = self.minimax(board, depth + 1, True)
+                board[row, col] = 0
+                best_score = min(score, best_score)
+            return best_score
