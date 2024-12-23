@@ -124,3 +124,10 @@ To change the board size or cell dimensions, modify the `cell_size` and `board_s
 - MediaPipe for hand tracking.
 - OpenCV for image processing and GUI rendering. 🎨✨🔍
 
+---
+
+## Output
+![Screenshot 2024-12-23 145335](https://github.com/user-attachments/assets/d75303b5-0de0-4818-8f94-c6b4165435da)
+![Screenshot 2024-12-23 145238](https://github.com/user-attachments/assets/8d4ffcc8-1dac-4e2c-b343-755e8ca341fd)
+![Screenshot 2024-12-23 145219](https://github.com/user-attachments/assets/44d67b3c-0720-49c0-904b-f60b0c015ce7)
+
