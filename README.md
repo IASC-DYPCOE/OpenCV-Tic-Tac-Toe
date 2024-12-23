@@ -106,12 +106,6 @@ To change the board size or cell dimensions, modify the `cell_size` and `board_s
 
 ---
 
-## Known Issues 🐛⚠️💡
-- **Lighting Conditions**: Hand tracking accuracy may vary based on lighting.
-- **Gesture Sensitivity**: Adjusting the pinch detection threshold (`0.05`) may improve usability.
-
----
-
 ## Future Improvements 🌟📈🚀
 - Multi-hand support for two-player mode.
 - Enhanced gesture controls for a more immersive experience.
