@@ -8,9 +8,8 @@ import math
 class TicTacToe:
     def __init__(self):
         self.board = np.zeros((3, 3), dtype=int)
-        # Swap the player values so computer (X) is 1 and human (O) is -1
-        self.computer_player = 1  # X
-        self.human_player = -1  # O
+        self.computer_player = 1
+        self.human_player = -1
         self.game_over = False
         self.winner = None
 
@@ -29,8 +28,7 @@ class TicTacToe:
             (self.board_size, self.board_size, 3), dtype=np.uint8
         )
 
-        # Make computer play first
-        self.computer_move()
+        # self.computer_move()
 
     def reset_game(self):
         """Reset the game state to start a new game."""
@@ -40,7 +38,6 @@ class TicTacToe:
         self.game_board = np.zeros(
             (self.board_size, self.board_size, 3), dtype=np.uint8
         )
-        # Make computer play first move after reset
         self.computer_move()
 
     def is_pinching(self, hand_landmarks):
