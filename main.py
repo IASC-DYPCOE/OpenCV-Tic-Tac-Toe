@@ -8,8 +8,8 @@ import math
 class TicTacToe:
     def __init__(self):
         self.board = np.zeros((3, 3), dtype=int)
-        self.computer_player = 1
-        self.human_player = -1
+        self.human_player = 1  # Changed to 1 (X)
+        self.computer_player = -1  # Changed to -1 (O)
         self.game_over = False
         self.winner = None
 
@@ -28,8 +28,6 @@ class TicTacToe:
             (self.board_size, self.board_size, 3), dtype=np.uint8
         )
 
-        # self.computer_move()
-
     def reset_game(self):
         """Reset the game state to start a new game."""
         self.board = np.zeros((3, 3), dtype=int)
@@ -38,7 +36,7 @@ class TicTacToe:
         self.game_board = np.zeros(
             (self.board_size, self.board_size, 3), dtype=np.uint8
         )
-        self.computer_move()
+        # Removed computer_move() call to ensure human plays first
 
     def is_pinching(self, hand_landmarks):
         thumb_tip = hand_landmarks.landmark[4]
@@ -81,23 +79,25 @@ class TicTacToe:
                     i * self.cell_size + self.cell_size // 2,
                 )
 
-                if self.board[i, j] == 1:  # Computer (X)
+                if self.board[i, j] == 1:  # Human (X)
                     cv2.line(
                         self.game_board,
                         (center[0] - 60, center[1] - 60),
                         (center[0] + 60, center[1] + 60),
-                        (255, 0, 0),
+                        (0, 0, 255),  # Changed color to red for human
                         3,
                     )
                     cv2.line(
                         self.game_board,
                         (center[0] + 60, center[1] - 60),
                         (center[0] - 60, center[1] + 60),
-                        (255, 0, 0),
+                        (0, 0, 255),  # Changed color to red for human
                         3,
                     )
-                elif self.board[i, j] == -1:  # Human (O)
-                    cv2.circle(self.game_board, center, 60, (0, 0, 255), 3)
+                elif self.board[i, j] == -1:  # Computer (O)
+                    cv2.circle(
+                        self.game_board, center, 60, (255, 0, 0), 3
+                    )  # Changed color to blue for computer
 
     def check_winner(self):
         for i in range(3):
@@ -220,9 +220,9 @@ class TicTacToe:
                     text = "Draw!"
                 else:
                     text = (
-                        "Computer (X) wins!"
-                        if self.winner == self.computer_player
-                        else "Player (O) wins!"
+                        "Player (X) wins!"
+                        if self.winner == self.human_player
+                        else "Computer (O) wins!"
                     )
                 cv2.putText(
                     self.game_board,
