@@ -8,10 +8,11 @@ import math
 class TicTacToe:
     def __init__(self):
         self.board = np.zeros((3, 3), dtype=int)
-        self.human_player = 1  # Changed to 1 (X)
-        self.computer_player = -1  # Changed to -1 (O)
+        self.human_player = 1
+        self.computer_player = -1
         self.game_over = False
         self.winner = None
+        self.difficulty = "medium"
 
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
@@ -24,20 +25,41 @@ class TicTacToe:
 
         self.cell_size = 200
         self.board_size = self.cell_size * 3
-        self.game_board = np.zeros(
-            (self.board_size, self.board_size, 3), dtype=np.uint8
-        )
+        self.game_board = np.zeros((self.board_size, self.board_size, 3), dtype=np.uint8)
+
+    def set_difficulty(self):
+        difficulty_window = np.zeros((200, 400, 3), dtype=np.uint8)  # Create a blank window
+        cv2.putText(difficulty_window, "Select Difficulty:", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        cv2.putText(difficulty_window, "E - Easy", (50, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(difficulty_window, "M - Medium", (50, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(difficulty_window, "H - Hard", (50, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+        cv2.imshow("Difficulty Selection", difficulty_window)
+
+        while True:
+            key = cv2.waitKey(0) & 0xFF  # Wait indefinitely for key press
+            if key == ord("e"):
+                self.difficulty = "easy"
+                break
+            elif key == ord("m"):
+                self.difficulty = "medium"
+                break
+            elif key == ord("h"):
+                self.difficulty = "hard"
+                break
+
+        cv2.destroyWindow("Difficulty Selection")  # Close the selection window
+        print(f"Difficulty set to: {self.difficulty}")
 
     def reset_game(self):
-        """Reset the game state to start a new game."""
         self.board = np.zeros((3, 3), dtype=int)
         self.game_over = False
         self.winner = None
-        self.game_board = np.zeros(
-            (self.board_size, self.board_size, 3), dtype=np.uint8
-        )
-        # Removed computer_move() call to ensure human plays first
+        self.game_board = np.zeros((self.board_size, self.board_size, 3), dtype=np.uint8)
 
+    def get_empty_cells(self):
+        return list(zip(*np.where(self.board == 0)))
+    
     def is_pinching(self, hand_landmarks):
         thumb_tip = hand_landmarks.landmark[4]
         index_tip = hand_landmarks.landmark[8]
@@ -99,6 +121,71 @@ class TicTacToe:
                         self.game_board, center, 60, (255, 0, 0), 3
                     )  # Changed color to blue for computer
 
+
+    def minimax(self, board, depth, is_maximizing):
+        winner = self.check_winner()
+        if winner == self.computer_player:
+            return 1
+        elif winner == self.human_player:
+            return -1
+        elif winner == 0:
+            return 0
+
+        if is_maximizing:
+            best_score = float("-inf")
+            for row, col in self.get_empty_cells():
+                board[row, col] = self.computer_player
+                score = self.minimax(board, depth + 1, False)
+                board[row, col] = 0
+                best_score = max(score, best_score)
+            return best_score
+        else:
+            best_score = float("inf")
+            for row, col in self.get_empty_cells():
+                board[row, col] = self.human_player
+                score = self.minimax(board, depth + 1, True)
+                board[row, col] = 0
+                best_score = min(score, best_score)
+            return best_score
+
+    def computer_move(self):
+        if self.difficulty == "easy":
+            move = random.choice(self.get_empty_cells())
+        elif self.difficulty == "medium":
+            move = self.find_best_medium_move()
+        else:
+            move = self.find_best_hard_move()
+
+        if move:
+            self.board[move[0], move[1]] = self.computer_player
+
+    def find_best_medium_move(self):
+        for row, col in self.get_empty_cells():
+            self.board[row, col] = self.computer_player
+            if self.check_winner() == self.computer_player:
+                return (row, col)
+            self.board[row, col] = 0
+
+        for row, col in self.get_empty_cells():
+            self.board[row, col] = self.human_player
+            if self.check_winner() == self.human_player:
+                return (row, col)
+            self.board[row, col] = 0
+
+        return random.choice(self.get_empty_cells())
+
+    def find_best_hard_move(self):
+        best_score = float("-inf")
+        best_move = None
+        for row, col in self.get_empty_cells():
+            self.board[row, col] = self.computer_player
+            score = self.minimax(self.board, 0, False)
+            self.board[row, col] = 0
+            if score > best_score:
+                best_score = score
+                best_move = (row, col)
+        return best_move
+
     def check_winner(self):
         for i in range(3):
             if abs(sum(self.board[i, :])) == 3:
@@ -116,61 +203,13 @@ class TicTacToe:
 
         return None
 
-    def get_empty_cells(self, board):
-        return list(zip(*np.where(board == 0)))
-
-    def is_terminal_state(self, board):
-        winner = self.check_winner()
-        if winner is not None:
-            return True
-        return len(self.get_empty_cells(board)) == 0
-
-    def minimax(self, board, depth, is_maximizing):
-        winner = self.check_winner()
-        if winner == self.computer_player:
-            return 1
-        elif winner == self.human_player:
-            return -1
-        elif winner == 0:
-            return 0
-
-        if is_maximizing:
-            best_score = float("-inf")
-            for row, col in self.get_empty_cells(board):
-                board[row, col] = self.computer_player
-                score = self.minimax(board, depth + 1, False)
-                board[row, col] = 0
-                best_score = max(score, best_score)
-            return best_score
-        else:
-            best_score = float("inf")
-            for row, col in self.get_empty_cells(board):
-                board[row, col] = self.human_player
-                score = self.minimax(board, depth + 1, True)
-                board[row, col] = 0
-                best_score = min(score, best_score)
-            return best_score
-
-    def computer_move(self):
-        best_score = float("-inf")
-        best_move = None
-
-        for row, col in self.get_empty_cells(self.board):
-            self.board[row, col] = self.computer_player
-            score = self.minimax(self.board, 0, False)
-            self.board[row, col] = 0
-
-            if score > best_score:
-                best_score = score
-                best_move = (row, col)
-
-        if best_move:
-            self.board[best_move[0], best_move[1]] = self.computer_player
-
     def play(self):
         cap = cv2.VideoCapture(0)
         last_move_time = 0
         cooldown = 1.0
+
+        # Set difficulty before starting the game
+        self.set_difficulty()
 
         while True:
             ret, frame = cap.read()
@@ -185,22 +224,16 @@ class TicTacToe:
 
             if results.multi_hand_landmarks:
                 hand_landmarks = results.multi_hand_landmarks[0]
-                self.mp_draw.draw_landmarks(
-                    frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS
-                )
+                self.mp_draw.draw_landmarks(frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
 
-                index_tip = hand_landmarks.landmark[8]
+                index_tip = hand_landmarks.landmark[8]  # Index finger tip
                 x = int(index_tip.x * self.board_size)
                 y = int(index_tip.y * self.board_size)
 
                 cv2.circle(self.game_board, (x, y), 10, (0, 255, 0), -1)
 
                 current_time = cv2.getTickCount() / cv2.getTickFrequency()
-                if (
-                    self.is_pinching(hand_landmarks)
-                    and current_time - last_move_time > cooldown
-                    and not self.game_over
-                ):
+                if self.is_pinching(hand_landmarks) and current_time - last_move_time > cooldown and not self.game_over:
                     row, col = self.get_cell_from_coordinates(x, y)
                     if 0 <= row < 3 and 0 <= col < 3 and self.board[row, col] == 0:
                         self.board[row, col] = self.human_player
@@ -208,7 +241,7 @@ class TicTacToe:
 
                         winner = self.check_winner()
                         if winner is None:
-                            self.computer_move()
+                            self.computer_move()  # Now considers selected difficulty
 
             winner = self.check_winner()
             if winner is not None and not self.game_over:
@@ -219,29 +252,11 @@ class TicTacToe:
                 if self.winner == 0:
                     text = "Draw!"
                 else:
-                    text = (
-                        "Player (X) wins!"
-                        if self.winner == self.human_player
-                        else "Computer (O) wins!"
-                    )
-                cv2.putText(
-                    self.game_board,
-                    text,
-                    (self.board_size // 4, self.board_size // 2),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    2,
-                    (0, 0, 0),
-                    3,
-                )
-                cv2.putText(
-                    self.game_board,
-                    "Press 'r' to reset",
-                    (self.board_size // 4, self.board_size // 2 + 50),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (0, 0, 0),
-                    2,
-                )
+                    text = "Player (X) wins!" if self.winner == self.human_player else "Computer (O) wins!"
+                cv2.putText(self.game_board, text, (self.board_size // 4, self.board_size // 2),
+                            cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 3)
+                cv2.putText(self.game_board, "Press 'r' to reset", (self.board_size // 4, self.board_size // 2 + 50),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
 
             cv2.imshow("Hand Tracking", frame)
             cv2.imshow("Tic Tac Toe", self.game_board)
@@ -251,9 +266,11 @@ class TicTacToe:
                 break
             elif key == ord("r"):
                 self.reset_game()
+                self.set_difficulty()  # Re-select difficulty after resetting
 
         cap.release()
         cv2.destroyAllWindows()
+
 
 
 if __name__ == "__main__":
