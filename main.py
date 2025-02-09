@@ -29,7 +29,7 @@ def init_session_state():
     if "show_results" not in st.session_state:
         st.session_state.show_results = False
     if "cursor_positions" not in st.session_state:
-        st.session_state.cursor_positions = deque(maxlen=5)
+        st.session_state.cursor_positions = deque(maxlen=3)
     if "pinch_status" not in st.session_state:
         st.session_state.pinch_status = deque([False] * 3, maxlen=3)
     if "current_cell" not in st.session_state:
@@ -58,8 +58,15 @@ def get_empty_cells():
 def get_smoothed_position(positions):
     if not positions:
         return None
-    positions_array = np.array(positions)
-    return np.mean(positions_array, axis=0).astype(int)
+    latest_pos = positions[-1]
+    if len(positions) < 2:
+        return latest_pos
+    
+    prev_pos = positions[-2]
+    return (
+        int(0.7 * latest_pos[0] + 0.3 * prev_pos[0]),
+        int(0.7 * latest_pos[1] + 0.3 * prev_pos[1])
+    )
 
 
 def is_pinching(hand_landmarks):
@@ -313,26 +320,33 @@ def main():
 
     # Game board column
     with col1:
-        board_placeholder = st.empty()
         status_placeholder = st.empty()
+        board_placeholder = st.empty()
 
     # Camera feed column
     with col2:
         camera_placeholder = st.empty()
         camera_status = st.empty()
 
-    # Initialize MediaPipe
+    # Initialize MediaPipe with optimized settings
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(
         static_image_mode=False,
         max_num_hands=1,
-        min_detection_confidence=0.7,
-        min_tracking_confidence=0.7,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+        model_complexity=0
     )
     mp_draw = mp.solutions.drawing_utils
+    
+    # Simplified drawing specifications
+    drawing_spec = mp_draw.DrawingSpec(thickness=1, circle_radius=1)
 
-    # Start video capture
+    # Start video capture with lower resolution
     cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_FPS, 30)
 
     if not cap.isOpened():
         camera_status.error(
@@ -342,51 +356,63 @@ def main():
 
     # Main game loop
     try:
+        frame_count = 0
         while True:
             ret, frame = cap.read()
             if not ret:
                 camera_status.error("Failed to capture video frame.")
                 break
 
+            # Process every other frame to reduce CPU load
+            frame_count += 1
+            if frame_count % 2 != 0:
+                continue
+
+            # Reduce frame size for processing
+            small_frame = cv2.resize(frame, (320, 240))
+            
             # Process frame for hand tracking
-            frame = cv2.flip(frame, 1)
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            small_frame = cv2.flip(small_frame, 1)
+            rgb_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb_frame)
 
+            # Scale frame back up for display
+            frame = cv2.flip(frame, 1)
+            
             # Draw current game board
             game_board = draw_board()
 
             if results.multi_hand_landmarks:
                 hand_landmarks = results.multi_hand_landmarks[0]
-                mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                # Draw simplified hand landmarks
+                mp_draw.draw_landmarks(
+                    frame,
+                    hand_landmarks,
+                    mp_hands.HAND_CONNECTIONS,
+                    drawing_spec,
+                    drawing_spec
+                )
 
-                # Get index finger position with increased sensitivity
+                # Scale coordinates back to full resolution
                 index_tip = hand_landmarks.landmark[8]
                 board_size = st.session_state.cell_size * 3
-
-                # Apply sensitivity multiplier (adjust these values to change sensitivity)
-                sensitivity = 1.3  # Increase this value to make pointer more sensitive
+                
+                # More responsive pointer movement
+                sensitivity = 1.5
                 center_x = 0.5
                 center_y = 0.5
 
-                # Calculate position with increased range of motion
-                x = int(
-                    board_size * (center_x + (index_tip.x - center_x) * sensitivity)
-                )
-                y = int(
-                    board_size * (center_y + (index_tip.y - center_y) * sensitivity)
-                )
+                x = int(board_size * (center_x + (index_tip.x - center_x) * sensitivity))
+                y = int(board_size * (center_y + (index_tip.y - center_y) * sensitivity))
 
-                # Clamp values to board boundaries
                 x = max(0, min(x, board_size - 1))
                 y = max(0, min(y, board_size - 1))
 
-                # Add position to smoothing buffer
                 st.session_state.cursor_positions.append((x, y))
                 smoothed_pos = get_smoothed_position(st.session_state.cursor_positions)
+                
                 if smoothed_pos is not None:
                     x, y = smoothed_pos
-                    # Show cursor position on game board
                     cv2.circle(game_board, (x, y), 10, (0, 255, 0), -1)
 
                     # Check for valid move
@@ -420,12 +446,12 @@ def main():
                 st.session_state.game_over = True
                 st.session_state.winner = winner
 
-            # Display game status with enhanced UI
+            # Update the status display section
             if st.session_state.game_over and not st.session_state.show_results:
                 st.session_state.show_results = True
                 if st.session_state.winner == 0:
                     with status_placeholder.container():
-                        st.title("Game Over - It's a Draw!")
+                        st.header("Game Over - It's a Draw!")
                         if st.button("Play Again", key="draw_restart"):
                             reset_game()
                 else:
@@ -435,18 +461,17 @@ def main():
                         else "Computer Wins! Try Again?"
                     )
                     with status_placeholder.container():
-                        st.title(winner_text)
+                        st.header(winner_text)
                         if st.button("Play Again", key="game_restart"):
                             reset_game()
 
-            # Update displays
-            camera_placeholder.image(frame, channels="RGB", use_container_width=True)
-            board_placeholder.image(
-                game_board, channels="RGB", use_container_width=True
-            )
+            # Update displays less frequently for better performance
+            if frame_count % 3 == 0:
+                camera_placeholder.image(frame, channels="RGB", use_container_width=True)
+            board_placeholder.image(game_board, channels="RGB", use_container_width=True)
 
-            # Add small delay to prevent excessive CPU usage
-            time.sleep(0.01)
+            # Reduced sleep time
+            time.sleep(0.001)
 
     finally:
         # Properly release resources
