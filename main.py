@@ -6,6 +6,7 @@ import random
 import math
 from PIL import Image
 import time
+from collections import deque
 
 
 def init_session_state():
@@ -27,6 +28,14 @@ def init_session_state():
         st.session_state.computer_player = -1
     if "show_results" not in st.session_state:
         st.session_state.show_results = False
+    if "cursor_positions" not in st.session_state:
+        st.session_state.cursor_positions = deque(maxlen=5)
+    if "pinch_status" not in st.session_state:
+        st.session_state.pinch_status = deque([False] * 3, maxlen=3)
+    if "current_cell" not in st.session_state:
+        st.session_state.current_cell = None
+    if "hover_start_time" not in st.session_state:
+        st.session_state.hover_start_time = None
 
 
 def reset_game():
@@ -35,26 +44,73 @@ def reset_game():
     st.session_state.winner = None
     st.session_state.last_move_time = time.time()
     st.session_state.show_results = False
+    st.session_state.current_cell = None
+    st.session_state.hover_start_time = None
+    st.session_state.cursor_positions.clear()
+    st.session_state.pinch_status.clear()
+    st.session_state.pinch_status.extend([False] * 3)
 
 
 def get_empty_cells():
     return list(zip(*np.where(st.session_state.board == 0)))
 
 
+def get_smoothed_position(positions):
+    if not positions:
+        return None
+    positions_array = np.array(positions)
+    return np.mean(positions_array, axis=0).astype(int)
+
+
 def is_pinching(hand_landmarks):
     thumb_tip = hand_landmarks.landmark[4]
     index_tip = hand_landmarks.landmark[8]
+
     distance = math.sqrt(
-        (thumb_tip.x - index_tip.x) ** 2 + (thumb_tip.y - index_tip.y) ** 2
+        (thumb_tip.x - index_tip.x) ** 2
+        + (thumb_tip.y - index_tip.y) ** 2
+        + (thumb_tip.z - index_tip.z) ** 2
     )
-    return distance < 0.05
+
+    PINCH_THRESHOLD = 0.05
+    RELEASE_THRESHOLD = 0.07
+
+    current_status = distance < PINCH_THRESHOLD
+    if len(st.session_state.pinch_status) > 0 and st.session_state.pinch_status[-1]:
+        current_status = distance < RELEASE_THRESHOLD
+
+    st.session_state.pinch_status.append(current_status)
+    return all(st.session_state.pinch_status)
 
 
 def get_cell_from_coordinates(x, y):
     board_size = st.session_state.cell_size * 3
     row = int(y * 3 // board_size)
     col = int(x * 3 // board_size)
-    return row, col
+
+    if 0 <= row < 3 and 0 <= col < 3:
+        return row, col
+    return None
+
+
+def process_move(x, y):
+    current_time = time.time()
+    cell = get_cell_from_coordinates(x, y)
+
+    if cell != st.session_state.current_cell:
+        st.session_state.current_cell = cell
+        st.session_state.hover_start_time = current_time
+        return False
+
+    HOVER_THRESHOLD = 0.5
+    if (
+        current_time - st.session_state.hover_start_time > HOVER_THRESHOLD
+        and cell is not None
+        and st.session_state.board[cell[0], cell[1]] == 0
+    ):
+        return True
+
+    return False
 
 
 def check_winner():
@@ -196,6 +252,19 @@ def draw_board():
             elif st.session_state.board[i, j] == st.session_state.computer_player:  # O
                 cv2.circle(game_board, center, 60, (255, 0, 0), 3)
 
+    # Highlight current cell
+    if st.session_state.current_cell is not None:
+        row, col = st.session_state.current_cell
+        x = col * st.session_state.cell_size
+        y = row * st.session_state.cell_size
+        cv2.rectangle(
+            game_board,
+            (x, y),
+            (x + st.session_state.cell_size, y + st.session_state.cell_size),
+            (0, 255, 0),
+            2,
+        )
+
     return game_board
 
 
@@ -227,8 +296,9 @@ def main():
         st.markdown("""
         1. Allow camera access when prompted
         2. Use your hand to control the game:
-           - Move your index finger to select a cell
-           - Pinch your thumb and index finger to make a move
+           - Move your index finger to hover over a cell
+           - Hold position for 0.5 seconds
+           - Pinch thumb and index finger to make a move
         3. Your moves are marked with X (red)
         4. Computer moves are marked with O (blue)
         """)
@@ -290,31 +360,49 @@ def main():
                 hand_landmarks = results.multi_hand_landmarks[0]
                 mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-                # Get index finger position
+                # Get index finger position with increased sensitivity
                 index_tip = hand_landmarks.landmark[8]
                 board_size = st.session_state.cell_size * 3
-                x = int(index_tip.x * board_size)
-                y = int(index_tip.y * board_size)
 
-                # Show cursor position on game board
-                cv2.circle(game_board, (x, y), 10, (0, 255, 0), -1)
+                # Apply sensitivity multiplier (adjust these values to change sensitivity)
+                sensitivity = 1.3  # Increase this value to make pointer more sensitive
+                center_x = 0.5
+                center_y = 0.5
 
-                # Check for pinch gesture
-                current_time = time.time()
-                if (
-                    is_pinching(hand_landmarks)
-                    and current_time - st.session_state.last_move_time > 1.0
-                    and not st.session_state.game_over
-                ):
-                    row, col = get_cell_from_coordinates(x, y)
+                # Calculate position with increased range of motion
+                x = int(
+                    board_size * (center_x + (index_tip.x - center_x) * sensitivity)
+                )
+                y = int(
+                    board_size * (center_y + (index_tip.y - center_y) * sensitivity)
+                )
+
+                # Clamp values to board boundaries
+                x = max(0, min(x, board_size - 1))
+                y = max(0, min(y, board_size - 1))
+
+                # Add position to smoothing buffer
+                st.session_state.cursor_positions.append((x, y))
+                smoothed_pos = get_smoothed_position(st.session_state.cursor_positions)
+                if smoothed_pos is not None:
+                    x, y = smoothed_pos
+                    # Show cursor position on game board
+                    cv2.circle(game_board, (x, y), 10, (0, 255, 0), -1)
+
+                    # Check for valid move
+                    current_time = time.time()
                     if (
-                        0 <= row < 3
-                        and 0 <= col < 3
-                        and st.session_state.board[row, col] == 0
+                        is_pinching(hand_landmarks)
+                        and current_time - st.session_state.last_move_time > 1.0
+                        and not st.session_state.game_over
+                        and process_move(x, y)
                     ):
+                        row, col = st.session_state.current_cell
                         # Make human move
                         st.session_state.board[row, col] = st.session_state.human_player
                         st.session_state.last_move_time = current_time
+                        st.session_state.current_cell = None
+                        st.session_state.hover_start_time = None
 
                         # Check for winner after human move
                         winner = check_winner()
@@ -346,16 +434,10 @@ def main():
                         if st.session_state.winner == st.session_state.human_player
                         else "Computer Wins! Try Again?"
                     )
-                    if st.session_state.winner == st.session_state.human_player:
-                        with status_placeholder.container():
-                            st.title(winner_text)
-                            if st.button("Play Again", key="win_restart"):
-                                reset_game()
-                    else:
-                        with status_placeholder.container():
-                            st.title(winner_text)
-                            if st.button("Play Again", key="lose_restart"):
-                                reset_game()
+                    with status_placeholder.container():
+                        st.title(winner_text)
+                        if st.button("Play Again", key="game_restart"):
+                            reset_game()
 
             # Update displays
             camera_placeholder.image(frame, channels="RGB", use_container_width=True)
