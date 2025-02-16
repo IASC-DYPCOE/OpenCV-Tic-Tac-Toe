@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand-Controlled Tic-Tac-Toe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center h-screen">
+
+    <h1 class="text-3xl font-bold mb-4">Hand-Controlled Tic-Tac-Toe</h1>
+
+    <!-- Game Board -->
+    <div id="game-container" class="grid grid-cols-3 gap-2 w-60 h-60 mb-4">
+        <!-- Cells dynamically created by JavaScript -->
+    </div>
+
+    <!-- Game Status -->
+    <p id="game-status" class="text-lg font-semibold mb-2"></p>
+
+    <!-- Restart Button -->
+    <button id="reset-btn" class="bg-blue-500 px-4 py-2 rounded-md text-white font-bold hover:bg-blue-600">
+        Restart Game
+    </button>
+
+    <!-- Video Stream -->
+    <video id="video" class="hidden" autoplay playsinline></video>
+    <canvas id="canvas" class="hidden"></canvas>
+
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const gameContainer = document.getElementById("game-container");
+        const gameStatus = document.getElementById("game-status");
+        const resetBtn = document.getElementById("reset-btn");
+        const API_BASE = "http://127.0.0.1:5000";  // Change if backend is hosted elsewhere
+
+        // Create the Tic-Tac-Toe Board UI
+        function createBoard() {
+            gameContainer.innerHTML = "";
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement("div");
+                cell.className = "w-20 h-20 flex items-center justify-center bg-gray-800 border border-gray-600 text-3xl font-bold";
+                cell.dataset.index = i;
+                gameContainer.appendChild(cell);
+            }
+        }
+
+        // Update the board UI based on server response
+        function updateBoard(board) {
+            const cells = gameContainer.children;
+            board.flat().forEach((val, index) => {
+                if (val === 1) {
+                    cells[index].textContent = "X";
+                    cells[index].classList.add("text-red-500");
+                } else if (val === -1) {
+                    cells[index].textContent = "O";
+                    cells[index].classList.add("text-blue-500");
+                } else {
+                    cells[index].textContent = "";
+                    cells[index].classList.remove("text-red-500", "text-blue-500");
+                }
+            });
+        }
+
+        // Fetch and display game state
+        async function fetchGameState() {
+            const response = await fetch(`${API_BASE}/get_game_state`);
+            const data = await response.json();
+            updateBoard(data.board);
+            gameStatus.textContent = data.game_over ?
+                (data.winner === 1 ? "You Win! 🎉" : data.winner === -1 ? "Computer Wins! 🤖" : "It's a Draw! 😐") : "Game in Progress...";
+        }
+
+        // Reset game
+        resetBtn.addEventListener("click", async () => {
+            await fetch(`${API_BASE}/reset_game`, { method: "POST" });
+            fetchGameState();
+        });
+
+        // Capture and send video frame
+        async function sendFrame() {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg"));
+
+            const formData = new FormData();
+            formData.append("frame", blob, "frame.jpg");
+
+            const response = await fetch(`${API_BASE}/process_frame`, {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+            updateBoard(data.board);
+            gameStatus.textContent = data.game_over ?
+                (data.winner === 1 ? "You Win! 🎉" : data.winner === -1 ? "Computer Wins! 🤖" : "It's a Draw! 😐") : "Game in Progress...";
+        }
+
+        // Initialize video capture
+        async function startVideo() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            canvas.width = 640;
+            canvas.height = 480;
+            setInterval(sendFrame, 500); // Send frames every 500ms
+        }
+
+        // Start the game
+        createBoard();
+        fetchGameState();
+        startVideo();
+    </script>
+
+</body>
+
+</html>
